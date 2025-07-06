@@ -4,11 +4,11 @@ from discord.ext import commands
 from discord import app_commands
 from dotenv import load_dotenv
 import sqlite3
-from datetime import datetime, timedelta
-from discord.utils import utcnow
 import yt_dlp
 import asyncio
 from collections import deque
+import random
+import time
 
 
 async def search_ytdlp_async(query, ydl_opts):
@@ -19,7 +19,7 @@ def _extract(query, ydl_opts):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         return ydl.extract_info(query, download=False)
 
-
+fruits = [":tangerine:", ":lemon:", ":watermelon:", ":grapes:", ":cherries:", ":pineapple:"]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -265,5 +265,52 @@ async def play_next_song(voice_client, guild_id, channel):
         SONG_QUEUES[guild_id] = deque()
 
 
+@bot.tree.command(name="slot", description="Točka ovocka")
+async def slot(interaction: discord.Interaction):
+    await interaction.response.defer()
+    first = random.randrange(0, 6)
+    second = random.randrange(0, 6)
+    third = random.randrange(0, 6)
+
+    msg = await interaction.followup.send("**Točím**", wait=True)
+    await asyncio.sleep(0.5)
+
+    for i in range(6):
+        new_fruits = f"{fruits[random.randrange(0, 6)]} {fruits[random.randrange(0, 6)]} {fruits[random.randrange(0, 6)]}"
+
+        await msg.edit(content=new_fruits)
+        await asyncio.sleep(0.25)
+
+    for i in range(6):
+        new_fruits = f"{fruits[first]} {fruits[random.randrange(0, 6)]} {fruits[random.randrange(0, 6)]}"
+
+        await msg.edit(content=new_fruits)
+        await asyncio.sleep(0.25)
+
+    for i in range(6):
+        new_fruits = f"{fruits[first]} {fruits[second]} {fruits[random.randrange(0, 6)]}"
+
+        await msg.edit(content=new_fruits)
+        await asyncio.sleep(0.25)
+
+    new_fruits = f"{fruits[first]} {fruits[second]} {fruits[third]}"
+
+    await msg.edit(content=new_fruits)
+
+    if first == second == third:
+        if first == 0:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 10 goonov!!")
+        elif first == 1:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 50 goonov!!")
+        elif first == 2:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 100 goonov!!")
+        elif first == 3:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 250 goonov!!")
+        elif first == 4:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 500 goonov!!")
+        elif first == 5:
+            await interaction.followup.send(f"{interaction.user.mention} Vyhrávaš 1000 goonov!!")
+    else:
+        await interaction.followup.send(f"{interaction.user.mention} Vyhral/a si prd")
 
 bot.run(TOKEN)
