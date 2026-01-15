@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+bot_env/
+*.db
+bin/
+cookies.txt
