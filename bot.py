@@ -92,8 +92,10 @@ SONG_QUEUES = {}
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.voice_states = True
+intents.guilds = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, activity=discord.Activity(type=discord.ActivityType.listening, name="tvoje songy 🎺"))
 
 @bot.event
 async def on_ready():
@@ -240,9 +242,17 @@ async def play(interaction: discord.Interaction, song_query: str):
     voice_client = interaction.guild.voice_client
 
     if voice_client is None:
-        voice_client = await voice_channel.connect()
+        voice_client = await voice_channel.connect(timeout=20.0, reconnect=True)
     elif voice_channel != voice_client.channel:
         await voice_client.move_to(voice_channel)
+
+    while not voice_client.is_connected() and count < 10:
+        await asyncio.sleep(0.5)
+        count += 1
+
+    if not voice_client.is_connected():
+        await interaction.followup.send("Pablo sa nevie napojiť sadge")
+        return
 
     ydl_options = {
         "format": "bestaudio[ext=webm][asr=48000]/bestaudio/best",
