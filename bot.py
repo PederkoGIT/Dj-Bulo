@@ -230,36 +230,50 @@ async def queue(interaction: discord.Interaction):
 async def play(interaction: discord.Interaction, song_query: str):
     await interaction.response.defer()
 
-    voice_channel = None
-    try:
-        voice_channel = interaction.user.voice.channel
-    
-    except:
+    if not interaction.user.voice:
         await interaction.followup.send("Nejsi v roomke, geňo.")
         return
-        
 
-    voice_client = interaction.guild.voice_client
+    voice_channel = interaction.user.voice.channel
+    guild = interaction.guild
+    voice_client = guild.voice_client
 
-    if voice_client is None:
-        voice_client = await voice_channel.connect(timeout=20.0, reconnect=True)
-    elif voice_channel != voice_client.channel:
-        await voice_client.move_to(voice_channel)
-
-    while not voice_client.is_connected() and count < 10:
-        await asyncio.sleep(0.5)
-        count += 1
-
-    if not voice_client.is_connected():
-        await interaction.followup.send("Pablo sa nevie napojiť sadge")
-        return
+    # 2. AGRESÍVNY CLEANUP (Rieši chybu 4006)
+    if voice_client:
+        if voice_client.channel != voice_channel:
+            try:
+                # Ak už bot niekde je, skúsime ho najprv úplne odpojiť
+                await voice_client.disconnect(force=True)
+                await asyncio.sleep(1.5) # Krátka pauza, aby Discord stihol uzavrieť session
+                voice_client = await voice_channel.connect(timeout=20.0)
+            except Exception as e:
+                print(f"Chyba pri prepájaní: {e}")
+                voice_client = guild.voice_client
+        # Ak už je v správnom kanáli, nerobíme nič a ideme ďalej
+    else:
+        try:
+            voice_client = await voice_channel.connect(timeout=20.0)
+        except Exception as e:
+            await interaction.followup.send(f"Pablo sa nevie napojiť: {e}")
+            return
 
     ydl_options = {
-        "format": "bestaudio[ext=webm][asr=48000]/bestaudio/best",
+        "format": "bestaudio/best",  # Skúsme najprv tento základ, kým to rozbeháme
         "noplaylist": True,
-        "youtube_include_dash_manifest": False,
-        "youtube_include_hls_manifest": False,
-        "cookiefile": "cookies.txt"
+        "cookiefile": "cookies.txt",
+        "js_runtime": "deno", 
+        "extractor_args": {
+            "youtube": {
+                # Pridáme viac klientov, aby mal bot alternatívy
+                "player_client": ["web", "tv"],
+                "skip": ["dash", "hls"],
+                # Toto nahrádza ten nefunkčný CLI príkaz:
+                "remote_components": ["ejs:github"]
+            }
+        },
+        # Tieto dva riadky pomáhajú pri nových YouTube zmenách
+        "allow_unplayable_formats": False,
+        "dynamic_mpd": True,
     }
 
     query = "ytsearch1: " + song_query
@@ -295,8 +309,8 @@ async def play_next_song(voice_client, guild_id, channel):
         audio_url, title = SONG_QUEUES[guild_id].popleft()
 
         ffmpeg_options = {
-            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-            "options": "-vn",
+            "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 2 -nostdin",
+            "options": "-vn -threads 1",
         }
 
         source = discord.FFmpegOpusAudio(audio_url, **ffmpeg_options, executable="ffmpeg")
@@ -304,7 +318,11 @@ async def play_next_song(voice_client, guild_id, channel):
         def after_play(error):
             if error:
                 print(f"Error playing {title}: {error}")
-            asyncio.run_coroutine_threadsafe(play_next_song(voice_client, guild_id, channel), bot.loop)
+
+            def next():
+                asyncio.run_coroutine_threadsafe(play_next_song(voice_client, guild_id, channel), bot.loop)
+            
+            bot.loop.call_later(0.5, next)
 
         voice_client.play(source, after=after_play)
 
